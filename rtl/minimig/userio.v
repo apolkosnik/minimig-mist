@@ -264,8 +264,8 @@ always @ (*) keyboard_disabled = key_disable;
 // input synchronization of external signals
 always @ (posedge clk) begin
   if (clk7_en) begin
-    _sjoy1 <= #1 _joy1;
-    _djoy1 <= #1 _sjoy1;
+    _sjoy1 <= #1 ~key_disable ? _joy1 : 16'hffff;
+    _djoy1 <= #1 ~key_disable ? _sjoy1 : 16'hffff;
     _tjoy2 <= #1 joy2enable ? _joy2 : 16'hffff;
     _djoy2 <= #1 joy2enable ? _tjoy2 : 16'hffff;
     if (sof)
