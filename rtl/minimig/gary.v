@@ -50,38 +50,38 @@ module gary
 (
 	input 	[23:1] cpu_address_in,	//cpu address bus input
 	input	[20:1] dma_address_in,	//agnus dma memory address input
-	output	[18:1] ram_address_out, //ram address bus output
+	output	[23:1] ram_address_out, //ram address bus output
 	input	[15:0] cpu_data_out,
 	output	[15:0] cpu_data_in,
 	input	[15:0] custom_data_out,
 	output	[15:0] custom_data_in,
 	input	[15:0] ram_data_out,
 	output	[15:0] ram_data_in,
-  input a1k,
+	input	a1k,
 	input	cpu_rd,					//cpu read
 	input	cpu_hwr,				//cpu high write
 	input	cpu_lwr,				//cpu low write
-  input cpu_hlt,
-	
+	input	cpu_hlt,
+
 	input	ovl,					//overlay kickstart rom over chipram
-	input	dbr,					//Agns takes the bus
+	input	dbr,					//Agnus takes the bus
 	input	dbwe,					//Agnus does a write cycle
 	output	dbs,					//data bus slow down
 	output	xbs,					//cross bridge select, active dbr prevents access
-	
+
 	input	[3:0] memory_config,	//selected memory configuration
-  input ecs,            // ECS chipset enable
+	input	ecs,					//ECS chipset enable
 	input	hdc_ena,				//enables hdd interface
-	
+
 	output	ram_rd,					//bus read
 	output	ram_hwr,				//bus high write
 	output	ram_lwr,				//bus low write
-	
+
 	output 	sel_reg,  				//select chip register bank
 	output 	reg [3:0] sel_chip, 	//select chip memory
-	output	reg [2:0] sel_slow,		//select slowfast memory ($C0000)
-	output 	reg sel_kick,		    //select kickstart rom
-  output  reg sel_kick1mb, // 1MB kickstart rom 'upper' half
+	output	reg [2:0] sel_slow,		//select slowfast memory ($C00000)
+	output	reg sel_kick,			//select kickstart rom
+	output	reg sel_kick1mb,		//1MB kickstart rom 'upper' half
 	output	sel_cia,				//select CIA space
 	output 	sel_cia_a,				//select cia A
 	output 	sel_cia_b, 				//select cia B
@@ -110,7 +110,9 @@ assign ram_lwr = dbr ?  dbwe : cpu_lwr;
 //--------------------------------------------------------------------------------------
 
 // ram address multiplexer (512KB bank)		
-assign ram_address_out = dbr ? dma_address_in[18:1] : cpu_address_in[18:1];
+// assign ram_address_out = dbr ? dma_address_in[18:1] : cpu_address_in[18:1];
+// output full address to make mapping easier.
+assign ram_address_out = dbr ? {3'b000, dma_address_in[20:1]} : cpu_address_in[23:1];
 
 //--------------------------------------------------------------------------------------
 
@@ -127,7 +129,7 @@ begin
 		sel_slow[1] = 1'b0;
 		sel_slow[2] = 1'b0;
 		sel_kick    = 1'b0;
-    sel_kick1mb = 1'b0;
+		sel_kick1mb = 1'b0;
 	end
 	else
 	begin
@@ -138,8 +140,8 @@ begin
 		sel_slow[0] = t_sel_slow[0];
 		sel_slow[1] = t_sel_slow[1];
 		sel_slow[2] = t_sel_slow[2];
-		sel_kick    = (cpu_address_in[23:19]==5'b1111_1 && (cpu_rd || cpu_hlt)) || (cpu_rd && ovl && cpu_address_in[23:19]==5'b0000_0) ? 1'b1 : 1'b0; //$F80000 - $FFFFF
-    sel_kick1mb = (cpu_address_in[23:19]==5'b1110_0 && (cpu_rd || cpu_hlt)) ? 1'b1 : 1'b0; // $E00000 - $E7FFFF
+		sel_kick    = (cpu_address_in[23:19]==5'b1111_1 && (cpu_rd || cpu_hlt)) || (cpu_rd && ovl && cpu_address_in[23:19]==5'b0000_0) ? 1'b1 : 1'b0; //$F80000 - $FFFFFF
+		sel_kick1mb = (cpu_address_in[23:19]==5'b1110_0 && (cpu_rd || cpu_hlt)) ? 1'b1 : 1'b0; //$E00000 - $E7FFFF
 	end
 end
 
@@ -176,6 +178,9 @@ assign sel_bank_1 = cpu_address_in[23:21]==3'b001 ? 1'b1 : 1'b0;
 
 //data bus slow down
 
+// $000000-$1FFFFF, chipmem
+// $C00000-$CFFFFF & $D00000-$D7FFFF, slowmem
+// $DF0000-$DFFFFF, custom chip registers
 assign dbs = cpu_address_in[23:21]==3'b000 || cpu_address_in[23:20]==4'b1100 || cpu_address_in[23:19]==5'b1101_0 || cpu_address_in[23:16]==8'b1101_1111 ? 1'b1 : 1'b0;
 
 assign xbs = ~(sel_cia | sel_gayle | sel_ide);

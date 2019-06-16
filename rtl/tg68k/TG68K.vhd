@@ -44,7 +44,6 @@ entity TG68K is
     uds           : out     std_logic;
     lds           : out     std_logic;
     rw            : out     std_logic;
-    e             : out     std_logic;
     vma           : buffer  std_logic:='1';
     wrd           : out     std_logic;
     ena7RDreg     : in      std_logic:='1';
@@ -58,15 +57,15 @@ entity TG68K is
     sel_eth       : buffer  std_logic;
     frometh       : in      std_logic_vector(15 downto 0);
     ethready      : in      std_logic;
-    turbochipram  : in      std_logic_vector(1 downto 0);
+    turbochipram  : in      std_logic;
     turbokick     : in      std_logic;
     cache_inhibit : out     std_logic;
-    ovr           : in      std_logic;
+--    ovr           : in      std_logic;
     ramaddr       : out     std_logic_vector(31 downto 0);
     cpustate      : out     std_logic_vector(5 downto 0);
     nResetOut     : buffer  std_logic;
     skipFetch     : buffer  std_logic;
-    cpuDMA        : buffer  std_logic;
+--    cpuDMA        : buffer  std_logic;
     ramlds        : out     std_logic;
     ramuds        : out     std_logic;
     CACR_out      : buffer  std_logic_vector(3 downto 0);
@@ -76,38 +75,6 @@ end TG68K;
 
 
 ARCHITECTURE logic OF TG68K IS
-
-COMPONENT TG68KdotC_Kernel
-  generic(
-    SR_Read         : integer := 2; --0=>user,   1=>privileged,   2=>switchable with CPU(0)
-    VBR_Stackframe  : integer := 2; --0=>no,     1=>yes/extended, 2=>switchable with CPU(0)
-    extAddr_Mode    : integer := 2; --0=>no,     1=>yes,          2=>switchable with CPU(1)
-    MUL_Mode        : integer := 2; --0=>16Bit,  1=>32Bit,        2=>switchable with CPU(1),  3=>no MUL,
-    DIV_Mode        : integer := 2; --0=>16Bit,  1=>32Bit,        2=>switchable with CPU(1),  3=>no DIV,
-    BitField        : integer := 2  --0=>no,     1=>yes,          2=>switchable with CPU(1)
-  );
-  port(
-    clk             : in      std_logic;
-    nReset          : in      std_logic;      --low active
-    clkena_in       : in      std_logic:='1';
-    data_in         : in      std_logic_vector(15 downto 0);
-    IPL             : in      std_logic_vector(2 downto 0):="111";
-    IPL_autovector  : in      std_logic:='0';
-    CPU             : in      std_logic_vector(1 downto 0):="00";  -- 00->68000  01->68010  11->68020(only same parts - yet)
-    addr_out        : buffer  std_logic_vector(31 downto 0);
-    data_write      : buffer  std_logic_vector(15 downto 0);
-    nWr             : out     std_logic;
-    nUDS, nLDS      : out     std_logic;
-    nResetOut       : out     std_logic;
-    FC              : out     std_logic_vector(2 downto 0);
-    busstate        : out     std_logic_vector(1 downto 0);  -- 00-> fetch code 10->read data 11->write data 01->no memaccess
-    skipFetch       : out     std_logic;
-    regin_out       : buffer  std_logic_vector(31 downto 0);
-    CACR_out        : buffer  std_logic_vector(3 downto 0);
-    VBR_out         : buffer  std_logic_vector(31 downto 0)
-  );
-END COMPONENT;
-
 
 SIGNAL cpuaddr          : std_logic_vector(31 downto 0);
 SIGNAL r_data           : std_logic_vector(15 downto 0);
@@ -131,7 +98,6 @@ SIGNAL lds_in           : std_logic;
 SIGNAL state            : std_logic_vector(1 downto 0);
 SIGNAL clkena           : std_logic;
 SIGNAL vmaena           : std_logic;
-SIGNAL state_ena        : std_logic;
 SIGNAL eind             : std_logic;
 SIGNAL eindd            : std_logic;
 SIGNAL sel_autoconfig   : std_logic;
@@ -139,9 +105,9 @@ SIGNAL autoconfig_out   : std_logic_vector(1 downto 0); -- We use this as a coun
 SIGNAL autoconfig_data  : std_logic_vector(3 downto 0); -- Zorro II RAM
 SIGNAL autoconfig_data2 : std_logic_vector(3 downto 0); -- Zorro III RAM
 SIGNAL autoconfig_data3 : std_logic_vector(3 downto 0); -- Zorro III ethernet
-SIGNAL sel_fast         : std_logic;
+SIGNAL sel_ram          : std_logic;
+SIGNAL sel_a0map        : std_logic;
 SIGNAL sel_chipram      : std_logic;
-SIGNAL turbochipram_cnt : std_logic_vector(1 downto 0);
 SIGNAL turbochip_ena    : std_logic := '0';
 SIGNAL turbochip_d      : std_logic := '0';
 SIGNAL turbokick_d      : std_logic := '0';
@@ -159,24 +125,15 @@ SIGNAL eth_base         : std_logic_vector(7 downto 0);
 SIGNAL eth_cfgd         : std_logic;
 SIGNAL sel_z2ram        : std_logic;
 SIGNAL sel_z3ram        : std_logic;
+SIGNAL sel_kick         : std_logic;
 SIGNAL sel_kickram      : std_logic;
 --SIGNAL sel_eth          : std_logic;
+SIGNAL sel_slow         : std_logic;
+SIGNAL sel_slowram      : std_logic;
+SIGNAL sel_cart         : std_logic;
 
-SIGNAL NMI_vector       : std_logic_vector(15 downto 0);
 SIGNAL NMI_addr         : std_logic_vector(31 downto 0);
-SIGNAL NMI_active       : std_logic;
-SIGNAL sel_interrupt    : std_logic;
-
-SIGNAL cpuaddr_w        : std_logic_vector(31 downto 0);
-SIGNAL data_write_w     : std_logic_vector(15 downto 0);
-SIGNAL state_w          : std_logic_vector(1 downto 0);
-SIGNAL wr_w             : std_logic;
-SIGNAL uds_in_w         : std_logic;
-SIGNAL lds_in_w         : std_logic;
-SIGNAL nResetOut_w      : std_logic;
-SIGNAL skipFetch_w      : std_logic;
-SIGNAL CACR_out_w       : std_logic_vector(3 downto 0);
-SIGNAL VBR_out_w        : std_logic_vector(31 downto 0);
+SIGNAL sel_nmi_vector   : std_logic;
 
 
 BEGIN
@@ -186,24 +143,15 @@ BEGIN
     IF rising_edge(clk) THEN
       IF reset='0' THEN
         NMI_addr <= X"0000007c";
-        NMI_active <= '0';
       ELSE
         NMI_addr <= VBR_out + X"0000007c";
-        IF (IPL="000") THEN
-          NMI_active <= '1';
-        ELSIF (cpuaddr(23 downto 1) = "1111111111111111111111") THEN
-          NMI_active <= '0';
-        END IF;
       END IF;
     END IF;
   END PROCESS;
 
-  NMI_vector <= X"000c" WHEN cpuaddr(1)='1' ELSE X"00a0"; -- 16-bit bus!
-
   wrd <= wr;
   addr <= cpuaddr;
-  datatg68 <= NMI_vector WHEN sel_interrupt='1' ELSE
-         fromram                              WHEN sel_fast='1'
+  datatg68 <= fromram                         WHEN sel_ram='1' AND sel_nmi_vector='0'
     --ELSE frometh                              WHEN sel_eth='1'
     ELSE autoconfig_data&r_data(11 downto 0)  WHEN sel_autoconfig='1' AND autoconfig_out="01" -- Zorro II RAM autoconfig
     ELSE autoconfig_data2&r_data(11 downto 0) WHEN sel_autoconfig='1' AND autoconfig_out="10" -- Zorro III RAM autoconfig
@@ -215,67 +163,57 @@ BEGIN
   sel_z2ram       <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND ((cpuaddr(23 downto 21) = "001") OR (cpuaddr(23 downto 21) = "010") OR (cpuaddr(23 downto 21) = "011") OR (cpuaddr(23 downto 21) = "100")) AND z2ram_ena='1' ELSE '0';
   --sel_eth         <= '1' WHEN (cpuaddr(31 downto 24) = eth_base) AND eth_cfgd='1' ELSE '0';
   sel_chipram     <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND (cpuaddr(23 downto 21)="000") AND turbochip_ena='1' AND turbochip_d='1' ELSE '0'; --$000000 - $1FFFFF
-  --sel_chipram     <= '1' WHEN sel_z3ram/='1' AND turbochip_ena='1' AND turbochip_d='1' AND (cpuaddr(23 downto 21)="000") ELSE '0'; --$000000 - $1FFFFF
-  sel_kickram     <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND ((cpuaddr(23 downto 19)="11111") OR (cpuaddr(23 downto 19)="11100"))  AND turbochip_ena='1' AND turbokick_d='1' ELSE '0'; -- $f8xxxx, e0xxxx
-  --sel_kickram     <= '1' WHEN sel_z3ram/='1' AND turbochip_ena='1' AND turbokick_d='1' AND (cpuaddr(23 downto 19)="11111") ELSE '0'; -- $f8xxxx
-  sel_interrupt   <= '1' WHEN (cpuaddr(31 downto 2) = NMI_addr(31 downto 2)) AND wr='0' ELSE '0';
+  sel_kick        <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND ((cpuaddr(23 downto 19)="11111") OR (cpuaddr(23 downto 19)="11100")) AND state/="11" ELSE '0'; -- $F8xxxx, $E0xxxx
+  sel_kickram     <= '1' WHEN sel_kick='1' AND turbochip_ena='1' AND turbokick_d='1' ELSE '0';
+  sel_slow        <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND ((cpuaddr(23 downto 20)="1100") OR (cpuaddr(23 downto 19)="11010")) ELSE '0'; -- $C00000 - $D7FFFF
+  sel_slowram     <= '1' WHEN sel_slow='1' AND turbochip_ena='1' AND turbokick_d='1' ELSE '0';
+  sel_cart        <= '1' WHEN (cpuaddr(31 downto 24) = "00000000") AND (cpuaddr(23 downto 20)="1010") ELSE '0'; -- $A00000 - $A7FFFF
+  sel_nmi_vector  <= '1' WHEN (cpuaddr(31 downto 2) = NMI_addr(31 downto 2)) AND state="10" ELSE '0';
 
-  sel_fast        <= '1' WHEN state/="01" AND (
+  sel_ram         <= '1' WHEN state/="01" AND sel_nmi_vector='0' AND (
          sel_z2ram='1'
       OR sel_z3ram='1'
       OR sel_chipram='1'
+      OR sel_slowram='1'
       OR sel_kickram='1'
     ) ELSE '0';
-  --sel_fast <= '1' when state/="01" AND (
-  --       cpuaddr(23 downto 21)="001"
-  --    OR cpuaddr(23 downto 21)="010"
-  --    OR cpuaddr(23 downto 21)="011"
-  --    OR cpuaddr(23 downto 21)="100"
-  --    OR sel_z3ram='1'
-  --    OR sel_chipram='1'
-  --    OR sel_kickram='1'
-  --  ) ELSE '0'; --$200000 - $9FFFFF
+
+  -- when this is true, we set bit 23 to zero, to map the memory ranges within $A0-$FF to
+  -- $20-$7F. Don't need this for chipram, since there is no remapping.
+  sel_a0map     <= '1' WHEN sel_cart='1' OR sel_slow='1' OR sel_kick='1' ELSE '0';
 
   cache_inhibit <= '1' WHEN sel_chipram='1' OR sel_kickram='1' ELSE '0';
 
-  --ramcs <= (NOT sel_fast AND NOT sel_eth) or slower(0);-- OR (state(0) AND NOT state(1));
-  ramcs <= (NOT sel_fast) or slower(0);-- OR (state(0) AND NOT state(1));
-  cpuDMA <= sel_fast;
+  ramcs <= (NOT sel_ram) or slower(0);-- OR (state(0) AND NOT state(1));
+--  cpuDMA <= sel_ram;
   cpustate <= clkena&slower(1 downto 0)&ramcs&state;
   ramlds <= lds_in;
   ramuds <= uds_in;
+
+  -- This is the mapping to the sram
+  -- map $00-$1F to $00-$1F (chipram), $A0-$FF to $20-$7F. All non-fastram goes into the first
+  -- 8M block. This map should be the same as in minimig_sram_bridge.v
+  -- 8M Zorro II RAM $20-9F goes to $80-$FF
   ramaddr(31 downto 25) <= "0000000";
-  ramaddr(24) <= sel_z3ram;  -- Remap the Zorro III RAM to 0x1000000
-  ramaddr(23 downto 21)
-    <=   "100" WHEN sel_z2ram&cpuaddr(23 downto 21)="1001" -- 2 -> 8
-    ELSE "101" WHEN sel_z2ram&cpuaddr(23 downto 21)="1010" -- 4 -> A
-    ELSE "110" WHEN sel_z2ram&cpuaddr(23 downto 21)="1011" -- 6 -> C
-    ELSE "111" WHEN sel_z2ram&cpuaddr(23 downto 21)="1100" -- 8 -> E
-    ELSE "001" WHEN sel_kickram='1'
-    ELSE cpuaddr(23 downto 21);  -- pass through others
-  ramaddr(20 downto 19)
-    <=   "11" WHEN sel_kickram='1' AND cpuaddr(23 downto 19)="11111"
-    ELSE "00" WHEN sel_kickram='1' AND cpuaddr(23 downto 19)="11100"
-    ELSE cpuaddr(20 downto 19);
-  ramaddr(18 downto 0) <= cpuaddr(18 downto 0);
-  --ramaddr(23 downto 21) <= "100" when sel_z3ram&cpuaddr(23 downto 21)="0001" -- 2 -> 8
-  --  else "101" when sel_z3ram&cpuaddr(23 downto 21)="0010" -- 4 -> A
-  --  else "110" when sel_z3ram&cpuaddr(23 downto 21)="0011" -- 6 -> C
-  --  else "111" when sel_z3ram&cpuaddr(23 downto 21)="0100" -- 8 -> E
-  --  else "001" when sel_kickram='1'
-  --  else cpuaddr(23 downto 21);  -- pass through others
-  --ramaddr(20 downto 19) <= "11" when sel_kickram='1'
-  --  else cpuaddr(20 downto 19);
-  --ramaddr(18 downto 0) <= cpuaddr(18 downto 0);
+  ramaddr(24) <= sel_z3ram; -- Remap the Zorro III RAM to 0x1000000
+  ramaddr(23 downto 21)     -- Remap the Zorro II RAM $200000-$9FFFFF to $800000-$FFFFFF
+    <=   "100" WHEN sel_z2ram&cpuaddr(23 downto 21)="1001" -- $2 -> $8
+    ELSE "101" WHEN sel_z2ram&cpuaddr(23 downto 21)="1010" -- $4 -> $A
+    ELSE "110" WHEN sel_z2ram&cpuaddr(23 downto 21)="1011" -- $6 -> $C
+    ELSE "111" WHEN sel_z2ram&cpuaddr(23 downto 21)="1100" -- $8 -> $E
+    ELSE '0'&cpuaddr(22 downto 21) WHEN sel_a0map='1' -- Remap $A0xxxx-$FFxxxx to $20xxxx-$7Fxxxx
+    ELSE cpuaddr(23 downto 21);
+  ramaddr(20 downto 0) <= cpuaddr(20 downto 0);
 
 
-pf68K_Kernel_inst: TG68KdotC_Kernel
+pf68K_Kernel_inst: work.TG68KdotC_Kernel
   generic map (
     SR_Read         => 2, -- 0=>user,   1=>privileged,    2=>switchable with CPU(0)
     VBR_Stackframe  => 2, -- 0=>no,     1=>yes/extended,  2=>switchable with CPU(0)
     extAddr_Mode    => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
     MUL_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no MUL,
-    DIV_Mode        => 2  -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no DIV,
+    DIV_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no DIV,
+    BitField        => 2  -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
   )
   PORT MAP (
     clk             => clk,           -- : in std_logic;
@@ -296,75 +234,22 @@ pf68K_Kernel_inst: TG68KdotC_Kernel
     skipFetch       => skipFetch,     -- : out std_logic
     CACR_out        => CACR_out,
     VBR_out         => VBR_out
-    --addr_out        => cpuaddr_w,     -- : buffer std_logic_vector(31 downto 0);
-    --data_write      => data_write_w,  -- : out std_logic_vector(15 downto 0);
-    --busstate        => state_w,       -- : buffer std_logic_vector(1 downto 0);
-    --nWr             => wr_w,          -- : out std_logic;
-    --nUDS            => uds_in_w,
-    --nLDS            => lds_in_w,      -- : out std_logic;
-    --nResetOut       => nResetOut_w,
-    --skipFetch       => skipFetch_w,   -- : out std_logic
-    --CACR_out        => CACR_out_w,
-    --VBR_out         => VBR_out_w
   );
 
 
---PROCESS (clk) BEGIN
---  IF rising_edge(clk) THEN
---    IF reset='0' THEN
---      cpuaddr     <= X"00000000";
---      data_write  <= X"0000";
---      state       <= "01";
---      wr          <= '1';
---      uds_in      <= '1';
---      lds_in      <= '1';
---      nResetOut   <= '1';
---      skipFetch   <= '0';
---      CACR_out    <= "0000";
---      VBR_out     <= X"00000000";
---    ELSE
---      cpuaddr     <= cpuaddr_w;
---      data_write  <= data_write_w;
---      state       <= state_w;
---      wr          <= wr_w;
---      uds_in      <= uds_in_w;
---      lds_in      <= lds_in_w;
---      nResetOut   <= nResetOut_w;
---      skipFetch   <= skipFetch_w;
---      CACR_out    <= CACR_out_w;
---      VBR_out     <= VBR_out_w;
---    END IF;
---  END IF;
---END PROCESS;
-
-PROCESS(clk) BEGIN
+PROCESS (clk, turbochipram, turbokick) BEGIN
   IF rising_edge(clk) THEN
-    IF turbochipram(0) = '1' THEN
-      turbochipram_cnt <= "10";
-    ELSIF turbochipram_cnt /= "00" THEN
-      turbochipram_cnt <= turbochipram_cnt - 1;
-    END IF;
-  END IF;
-END PROCESS;
-
-PROCESS(clk,turbochipram(1), turbokick) BEGIN
-  IF rising_edge(clk) THEN
-    IF reset='0' THEN
+    IF (reset='0' OR nResetOut='0') THEN
       turbochip_d <= '0';
       turbokick_d <= '0';
     ELSIF state="01" THEN -- No mem access, so safe to switch chipram access mode
---      IF turbochipram(1)='1' OR turbochipram_cnt/="00" THEN
---        turbochip_d <= '1';
---      ELSE
---        turbochip_d <= '0';
---      END IF;
-      turbochip_d <= turbochipram(0);
+      turbochip_d <= turbochipram;
       turbokick_d <= turbokick;
     END IF;
   END IF;
 END PROCESS;
 
-PROCESS (clk) BEGIN
+PROCESS (clk, fastramcfg, cpuaddr) BEGIN
   -- Zorro II RAM (Up to 8 meg at 0x200000)
   autoconfig_data <= "1111";
   IF fastramcfg/="000" THEN
@@ -422,7 +307,7 @@ PROCESS (clk) BEGIN
   END IF;
 
   IF rising_edge(clk) THEN
-    IF reset='0' THEN
+    IF (reset='0' OR nResetOut='0') THEN
       autoconfig_out <= "01";    --autoconfig on
       turbochip_ena <= '0';  -- disable turbo_chipram until we know kickstart's running...
       z2ram_ena <='0';
@@ -462,20 +347,6 @@ END PROCESS;
 
 PROCESS (clk) BEGIN
   IF rising_edge(clk) THEN
-    IF reset='0' THEN
-      vmaena <= '0';
-    ELSIF ena7RDreg='1' THEN
-      vmaena <= '0';
-      IF sync_state=sync5 THEN
-        e <= '1';
-      END IF;
-      IF sync_state=sync9 THEN
-        e <= '0';
-        vmaena <= NOT vma;
-      END IF;
-    END IF;
-  END IF;
-  IF rising_edge(clk) THEN
     IF ena7WRreg='1' THEN
       eind <= ein;
       eindd <= eind;
@@ -500,31 +371,20 @@ PROCESS (clk) BEGIN
   END IF;
 END PROCESS;
 
+clkena <= '1' WHEN (clkena_in='1' AND enaWRreg='1' AND (state="01" OR (ena7RDreg='1' AND clkena_e='1') OR ramready='1')) ELSE '0';
 
-PROCESS (clk, clkena_in, enaWRreg, state, ena7RDreg, clkena_e, ramready) BEGIN
-  state_ena <= '0';
---  IF clkena_in='1' AND enaWRreg='1' AND (state="01" OR (ena7RDreg='1' AND clkena_e='1') OR ramready='1' OR ethready='1') THEN
-  IF clkena_in='1' AND enaWRreg='1' AND (state="01" OR (ena7RDreg='1' AND clkena_e='1') OR ramready='1') THEN
-    clkena <= '1';
-  ELSE
-    clkena <= '0';
-  END IF;
-  IF state="01" THEN
-    state_ena <= '1';
-  END IF;
+PROCESS (clk) BEGIN
   IF rising_edge(clk) THEN
     IF clkena='1' THEN
       slower <= "0111"; -- rokk
---        slower <= "0111";
     ELSE
       slower(3 downto 0) <= '0'&slower(3 downto 1); -- enaWRreg&slower(3 downto 1);
---        slower(0) <= NOT slower(3) AND NOT slower(2);
     END IF;
   END IF;
 END PROCESS;
 
 
-PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, sel_fast)
+PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, sel_ram)
   BEGIN
     IF state="01" THEN
       as <= '1';
@@ -532,7 +392,7 @@ PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, 
       uds <= '1';
       lds <= '1';
     ELSE
-      as <= (as_s AND as_e) OR sel_fast;
+      as <= (as_s AND as_e) OR sel_ram;
       rw <= rw_s AND rw_e;
       uds <= uds_s AND uds_e;
       lds <= lds_s AND lds_e;
@@ -544,13 +404,13 @@ PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, 
       uds_s <= '1';
       lds_s <= '1';
     ELSIF rising_edge(clk) THEN
-          IF ena7WRreg='1' THEN
+      IF ena7WRreg='1' THEN
         as_s <= '1';
         rw_s <= '1';
         uds_s <= '1';
         lds_s <= '1';
           CASE S_state IS
-            WHEN "00" => IF state/="01" AND sel_fast='0' THEN
+            WHEN "00" => IF state/="01" AND sel_ram='0' THEN
                      uds_s <= uds_in;
                      lds_s <= lds_in;
                     S_state <= "01";
@@ -583,7 +443,7 @@ PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, 
       lds_e <= '1';
       clkena_e <= '0';
     ELSIF rising_edge(clk) THEN
-          IF ena7RDreg='1' THEN
+      IF ena7RDreg='1' THEN
         as_e <= '1';
         rw_e <= '1';
         uds_e <= '1';
@@ -592,7 +452,7 @@ PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, 
         CASE S_state IS
           WHEN "00" =>
                  cpuIPL <= IPL;
-                 IF sel_fast='0' THEN
+                 IF sel_ram='0' THEN
                    IF state/="01" THEN
                     as_e <= '0';
                    END IF;
@@ -615,7 +475,6 @@ PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e, 
         END CASE;
       END IF;
     END IF;
-  END PROCESS;
+END PROCESS;
 
 END;
-

@@ -165,7 +165,7 @@ module minimig
 	//sram pins
 	output	[15:0] ram_data,	//sram data bus
 	input	[15:0] ramdata_in,		//sram data bus in
-	output	[21:1] ram_address,	//sram address bus
+	output	[22:1] ram_address,	//sram address bus
 	output	_ram_bhe,			//sram upper byte select
 	output	_ram_ble,			//sram lower byte select
 	output	_ram_we,			//sram write enable
@@ -272,7 +272,7 @@ wire		user_sdo;				//userio spi data out
 //local signals for address bus
 wire		[23:1] cpu_address_out;	//cpu address out
 wire		[20:1] dma_address_out;	//agnus address out
-wire		[18:1] ram_address_out;	//ram address out
+wire		[23:1] ram_address_out;	//ram address out
 
 //local signals for control bus
 wire		ram_rd;					//ram read enable
@@ -374,7 +374,7 @@ wire	[1:0] hr_filter;		//hires interpolation filter mode: bit 0 - horizontal, bi
 wire	[1:0] scanline;			//scanline effect configuration
 wire  [1:0] dither;   // video output dither
 wire	hires;					//hires signal from Denise for interpolation filter enable in Amber
-wire	aron;					//Action Replay is enabled
+//wire	aron;					//Action Replay is enabled
 wire	cpu_speed;				//requests CPU to switch speed mode
 wire	turbo;					//CPU is working in turbo mode
 reg		[6:0] memory_config;	//memory configuration
@@ -418,6 +418,10 @@ wire [ 16-1:0] host_wdat;
 wire [ 16-1:0] host_rdat;
 wire           host_ack;
 
+wire           sys_reset;    //reset output from minimig_syscontrol.v
+
+assign reset = sys_reset | ~_cpu_reset_in; // both tg68k and minimig_syscontrol hold the reset signal for some clicks
+
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
 
@@ -438,12 +442,12 @@ assign pwrled = (_led & (led_dim | ~turbo)) ? 1'b0 : 1'b1; // led dim at off-sta
 
 assign memcfg = memory_config[5:0];
 
-// turbo chipram only when in AGA mode, no overlay is active, cpu_config[2] (fast chip) is enabled or Agnus allows CPU on the bus and chipRAM=2MB
+// turbo chipram only when in AGA mode, no overlay is active, cpu_config[2] (fast chip) is enabled and Agnus allows CPU on the bus and chipRAM=2MB
 //assign turbochipram = chipset_config[4] && !ovl && (cpu_config[2] || cpu_custom) && (&memory_config[1:0]); // TODO fix turbochipram
 assign turbochipram = chipset_config[4] && !ovl && (cpu_config[2] && cpu_custom) && (&memory_config[1:0]);
 
-// turbo kickstart only when no overlay is active and cpu_config[3] (fast kick) enabled or AGA mode is enabled
-assign turbokick = !ovl && (cpu_config[3] || chipset_config[4]);
+// turbo kickstart only when no overlay is active and cpu_config[3] (fast kick) enabled and AGA mode is enabled
+assign turbokick = !ovl && cpu_config[3] && chipset_config[4];
 
 // NTSC/PAL switching is controlled by OSD menu, change requires reset to take effect
 always @(posedge clk)
@@ -842,7 +846,7 @@ minimig_bankmapper BMAP1
 	.kick(sel_kick),
   .kick1mb(sel_kick1mb),
 	.cart(sel_cart),
-	.aron(aron),
+//	.aron(1'b0),
   .ecs(|chipset_config[4:3]),
 	.memory_config(memory_config[3:0]),
 	.bank(bank)
@@ -892,7 +896,8 @@ cart CART1
   .int7           (int7           ),
   .sel_cart       (sel_cart       ),
   .ovr            (ovr            ),
-  .aron           (aron           )
+//  .aron           (aron           ),
+  .cpuhlt         (cpuhlt         )
 );
 
 //level 7 interrupt for CPU
@@ -975,8 +980,8 @@ minimig_syscontrol CONTROL1
 	.clk(clk),
   .clk7_en (clk7_en),
 	.cnt(sof),
-	.mrst(kbdrst | usrrst | rst_ext | ~_cpu_reset_in),
-	.reset(reset)
+	.mrst(kbdrst | usrrst | rst_ext),// | ~_cpu_reset_in),
+	.reset(sys_reset)
 );
 
 
@@ -1003,7 +1008,7 @@ assign sdo = paula_sdo | user_sdo;
 //--------------------------------------------------------------------------------------
 
 //cpu reset and clock
-assign _cpu_reset = ~(reset || cpurst);
+assign _cpu_reset = ~(cpurst || sys_reset); //~(reset || cpurst);
 
 //--------------------------------------------------------------------------------------
 
