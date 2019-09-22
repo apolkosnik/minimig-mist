@@ -2158,6 +2158,25 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 					  trapmake <= '1';
 					end if;
 
+				  when "1110100" => --rtd
+					if VBR_Stackframe = 0 or (cpu(0) = '0' and VBR_Stackframe = 2) then
+					  trap_illegal <= '1';
+					  trapmake <= '1';
+					else
+					  datatype <= "10";
+					  set_exec(opcADD) <= '1'; --for displacement
+					  set_exec(Regwrena) <= '1';
+					  set(no_Flags) <= '1';
+					  if decodeOPC = '1' then
+						setstate <= "10";
+						set(postadd) <= '1';
+						setstackaddr <= '1';
+						set(direct_delta) <= '1';
+						set(directPC) <= '1';
+						next_micro_state <= rtd1;
+					  end if;
+					end if;
+
 				  when "1110101" => --rts
 					datatype <= "10";
 					if decodeOPC = '1' then
@@ -3091,6 +3110,15 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 										end if;
 					WHEN rte5 =>            -- RTE
 					next_micro_state <= nop;
+
+	  when rtd1 => -- RTD
+		set(store_ea_data) <= '1';
+		next_micro_state <= rtd2;
+
+	  when rtd2 => -- RTD
+		setstackaddr <= '1';
+		set(ea_data_OP2) <= '1';
+
 	  when movec1 => -- MOVEC
 		set(briefext) <= '1';
 		set_writePCbig <= '1';
