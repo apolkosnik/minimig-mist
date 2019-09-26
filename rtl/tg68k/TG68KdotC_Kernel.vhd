@@ -2137,7 +2137,6 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 					  if stop = '1' then
 						skipFetch <= '1';
 					  end if;
-
 					end if;
 
 				  when "1110011" | "1110111" => --rte/rtr
@@ -2148,10 +2147,11 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 						setstackaddr <= '1';
 						if opcode(2) = '1' then
 						  set(directCCR) <= '1';
+						  next_micro_state <= rtr1;
 						else
 						  set(directSR) <= '1';
+						  next_micro_state <= rte1;
 						end if;
-						next_micro_state <= rte1;
 					  end if;
 					else
 					  trap_priv <= '1';
@@ -3059,6 +3059,15 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 		datatype <= "01";
 		writeSR <= '1';
 		next_micro_state <= trap3;
+
+	  when rtr1 => -- RTR
+		datatype <= "10";
+		setstate <= "10";
+		set(postadd) <= '1';
+		setstackaddr <= '1';
+		set(direct_delta) <= '1';
+		set(directPC) <= '1';
+		next_micro_state <= nopnop;
 
 										-- return from exception - RTE
 										-- fetch PC and status register from stack
