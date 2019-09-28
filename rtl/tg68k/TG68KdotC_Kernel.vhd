@@ -2455,6 +2455,9 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 				setstate <= "10";
 				set(update_ld) <= '1';
 				set(postadd) <= '1';
+				if opcode(2 downto 0) = "111" then
+				  set(use_SP) <= '1';
+				end if;
 				next_micro_state <= cmpm;
 			  end if;
 			  set_exec(ea_data_OP1) <= '1';
@@ -2964,6 +2967,9 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 	  when cmpm => -- cmpm (Ay)+,(Ax)+
 		set_direct_data <= '1';
 		set(postadd) <= '1';
+		if opcode(11 downto 9) = "111" then
+		  set(use_SP) <= '1';
+		end if;
 		dest_hbits <= '1';
 		dest_areg <= '1';
 		setstate <= "10";
