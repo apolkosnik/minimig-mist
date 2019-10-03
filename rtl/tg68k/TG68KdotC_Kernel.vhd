@@ -574,7 +574,7 @@ begin
   -----------------------------------------------------------------------------
   -- set OP1out
   -----------------------------------------------------------------------------
-  process (reg_QA, store_in_tmp, ea_data, long_start, addr, exec, memmaskmux)
+  process (reg_QA, store_in_tmp, ea_data, long_start, addr, exec, memmaskmux, data_write_tmp)
   begin
 	OP1out <= reg_QA;
 	if exec(OP1out_zero) = '1' then
@@ -1286,7 +1286,7 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
   -- decode opcode
   -----------------------------------------------------------------------------
   process(clk, cpu, OP1out, OP2out, opcode, exe_condition, nextpass, micro_state, decodeOPC, state, setexecOPC, Flags, FlagsSR, direct_data, build_logical,
-	build_bcd, set_Z_error, trapd, movem_run, last_data_read, set, set_V_Flag, z_error, trap_trace, trap_interrupt,
+	build_bcd, set_Z_error, trapd, movem_run, last_data_in, last_data_read, set, set_V_Flag, z_error, trap_trace, trap_interrupt,
 	SVmode, preSVmode, stop, long_done, ea_only, setstate, execOPC, exec_write_back, exe_datatype,
 	datatype, interrupt, c_out, trapmake, rot_cnt, brief, addr,
 	long_start, set_datatype, sndOPC, set_exec, exec, ea_build_now, reg_QA, reg_QB, make_berr, trap_berr, trap_trapv)
