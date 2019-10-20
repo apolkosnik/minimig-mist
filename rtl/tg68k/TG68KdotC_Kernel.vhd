@@ -530,12 +530,12 @@ begin
 	  rf_dest_addr <= brief(15 downto 12);
 	elsif set(get_bfoffset) = '1' then
 	  if opcode(15 downto 12) = "1110" then
-            rf_dest_addr <= '0' & sndOPC(8 downto 6);
+		rf_dest_addr <= '0' & sndOPC(8 downto 6);
 	  else
-	    rf_dest_addr <= sndOPC(9 downto 6);
+		rf_dest_addr <= sndOPC(9 downto 6);
 	  end if;
 	elsif dest_2ndHbits = '1' then
-	   rf_dest_addr <= '0' & sndOPC(14 downto 12);
+	  rf_dest_addr <= '0' & sndOPC(14 downto 12);
 	elsif set(write_reminder) = '1' then
 	  rf_dest_addr <= '0' & sndOPC(2 downto 0);
 	elsif setstackaddr = '1' then
