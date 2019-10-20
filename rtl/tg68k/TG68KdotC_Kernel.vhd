@@ -563,7 +563,7 @@ begin
 		rf_source_addr <= movem_regaddr;
 	  end if;
 	elsif source_2ndLbits = '1' then
-	  rf_dest_addr <= '0' & sndOPC(2 downto 0);
+	  rf_source_addr <= '0' & sndOPC(2 downto 0);
 	elsif source_2ndHbits = '1' then
 	  rf_source_addr <= '0' & sndOPC(14 downto 12);
 	elsif source_lowbits = '1' then
